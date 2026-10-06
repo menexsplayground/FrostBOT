@@ -86,7 +86,6 @@ class ServiceOrderModal(Modal):
         embed.add_field(name="Payment", value=f"{pay_emoji} {pay_name}", inline=False)
         embed.set_footer(text="Awaiting Owner Payment Confirmation...")
 
-        # Tlačítko pro schválení platby majitelem
         view = OwnerApprovalView(interaction.user, self.service_type, self.current_stat.value, self.goal_stat.value, pay_name)
         
         await interaction.response.send_message("✅ Your order has been submitted for payment confirmation by the owner!", ephemeral=True)
@@ -106,7 +105,6 @@ class OwnerApprovalView(View):
     async def confirm_payment(self, interaction: discord.Interaction, button: Button):
         guild = interaction.guild
 
-        # Nastavení oprávnění pro ticket: zákazník vidí, ale nemůže psát (send_messages=False)
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             self.client: discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True),
@@ -177,7 +175,29 @@ class CatalogButtonView(View):
     async def catalog_button(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_modal(ServiceOrderModal(self.service_name))
 
-# --- PŘÍKAZY PRO NASTAVENÍ KANÁLŮ (JEDNOTLIVÉ KATALOGY) ---
+# --- PŘÍKAZY PRO NASTAVENÍ KANÁLŮ ---
+
+@bot.command(name='setup_order')
+@commands.has_permissions(administrator=True)
+async def setup_order(ctx):
+    embed = discord.Embed(
+        title="🛒 Welcome to FrostSTORE Order Hub",
+        description="Ready to boost your account? Follow the steps below to place your order securely.\n\n"
+                    "**1. Browse Services**\n"
+                    "Head over to our **SERVICES** category (`#ranked`, `#prestige`, `#winstreak`, etc.).\n\n"
+                    "**2. Click & Fill Form**\n"
+                    "Click the **Order Now** button under your desired service. A form will pop up for you to fill in your current stats, goals, and brawlers.\n\n"
+                    "**3. Payment Methods**\n"
+                    "We accept secure payments via:\n"
+                    "<:applepay:123456789> **Apple Pay**\n"
+                    "<:paypal:123456789> **PayPal**\n"
+                    "<:bank:123456789> **Bank Transfer**\n\n"
+                    "**4. Secure Ticket**\n"
+                    "Once the owner confirms your payment, a private secure ticket will be created automatically for your boost!",
+        color=discord.Color.purple()
+    )
+    embed.set_footer(text="FrostSTORE™ — Professional & Secure Boosting")
+    await ctx.send(embed=embed)
 
 @bot.command(name='setup_ranked')
 @commands.has_permissions(administrator=True)
