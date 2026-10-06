@@ -35,7 +35,7 @@ ACTIVE_ORDERS_DATA = []  # Seznam pro živý přehled aktivních objednávek
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name} (ID: {bot.user.id})')
-    print('FrostSTORE Bot is fully online and ready with advanced tracking!')
+    print('FrostSTORE Bot is fully online and ready!')
 
 # --- CENÍK A SLEVY FORMATER ---
 def get_service_pricing_embed(service_type: str):
@@ -149,7 +149,7 @@ class ServiceOrderModal(Modal):
         await interaction.response.send_message("✅ Your order has been submitted for payment confirmation by the owner!", ephemeral=True)
         await interaction.channel.send(embed=embed, view=view)
 
-# --- SCHVÁLENÍ PLATBY MAJITELEM A ROZCESTNÍK (TICKET + AVAILABLE ORDERS) ---
+# --- SCHVÁLENÍ PLATBY A TICKET ---
 class OwnerApprovalView(View):
     def __init__(self, client, service_type, current, goal, payment):
         super().__init__(timeout=None)
@@ -182,19 +182,19 @@ class OwnerApprovalView(View):
         embed.set_footer(text="FrostSTORE Secure System")
 
         staff_view = StaffOrderControlView(client_name=self.client.name, service_short=self.service_type)
-        ticket_msg = await ticket_channel.send(embed=embed, view=staff_view)
+        await ticket_channel.send(embed=embed, view=staff_view)
 
-        # Přidání do aktivních objednávek pro živý přehled
+        # Přidání do aktivních objednávek
         order_item = {
             "client": self.client.name,
             "route": f"{self.current}->{self.goal}",
-            "price": "35€",  # Orientační/automatická cena dle domluvy
+            "price": "35€",
             "status_emoji": "🛌",
             "percent": 0
         }
         ACTIVE_ORDERS_DATA.append(order_item)
 
-        # Odeslání do kanálu #avalabile-orders pro boostery
+        # Odeslání do #avalabile-orders
         avail_channel = discord.utils.get(guild.text_channels, name="avalabile-orders")
         if avail_channel:
             avail_embed = discord.Embed(
@@ -202,7 +202,6 @@ class OwnerApprovalView(View):
                 description=f"Service: **{self.service_type}**\nRoute: `{self.current} ➔ {self.goal}`\nClient: {self.client.name}",
                 color=discord.Color.green()
             )
-            avail_embed.set_footer(text="Check active orders and coordinate in booster chat.")
             await avail_channel.send(embed=avail_embed)
 
         await interaction.message.delete()
@@ -217,11 +216,10 @@ class StaffOrderControlView(View):
 
     @discord.ui.button(label="Booster Online (🟢)", style=discord.ButtonStyle.secondary)
     async def booster_online(self, interaction: discord.Interaction, button: Button):
-        # Aktualizace stavu na aktivní
         for o in ACTIVE_ORDERS_DATA:
             if o["client"] == self.client_name:
                 o["status_emoji"] = "🟢"
-        await interaction.response.send_message("🟢 Booster is active and working on this order! Status updated to 🟢.", ephemeral=True)
+        await interaction.response.send_message("🟢 Booster is active and working on this order!", ephemeral=True)
 
     @discord.ui.button(label="Update Progress", style=discord.ButtonStyle.primary, emoji="📊")
     async def update_progress(self, interaction: discord.Interaction, button: Button):
@@ -231,16 +229,12 @@ class StaffOrderControlView(View):
     @discord.ui.button(label="Close & Review", style=discord.ButtonStyle.danger, emoji="⭐")
     async def close_order(self, interaction: discord.Interaction, button: Button):
         global MONTHLY_EARNINGS, TODAY_EARNINGS
-        # Přičtení peněz do earnings (např. fixně nebo podle domluvy, zde simulujeme 35€)
-        earned_amount = 35.0
-        MONTHLY_EARNINGS += earned_amount
-        TODAY_EARNINGS += earned_amount
+        MONTHLY_EARNINGS += 35.0
+        TODAY_EARNINGS += 35.0
 
-        # Odebrání z aktivních
         global ACTIVE_ORDERS_DATA
         ACTIVE_ORDERS_DATA = [o for o in ACTIVE_ORDERS_DATA if o["client"] != self.client_name]
 
-        # Odeslání výzvy k recenzi do kanálu review
         guild = interaction.guild
         review_channel = discord.utils.get(guild.text_channels, name="review")
         if review_channel:
@@ -253,11 +247,8 @@ class StaffOrderControlView(View):
 
         await interaction.channel.send("⭐ Order finished! Review request automatically sent to #review. Archiving ticket...")
         await interaction.message.delete()
-        
-        # Smazání ticketu po chvíli nebo ponechání
-        # await interaction.channel.delete()
 
-# --- VÝPOČET PROCENT A AKTUALIZACE ---
+# --- VÝPOČET PROCENT ---
 class ProgressUpdateModal(Modal, title="Update Order Progress"):
     current_value = TextInput(
         label="Enter current value (Elo / Trophies)",
@@ -273,23 +264,20 @@ class ProgressUpdateModal(Modal, title="Update Order Progress"):
     async def on_submit(self, interaction: discord.Interaction):
         try:
             val = int(self.current_value.value)
-            # Standardní výpočet pro příklad Master (8250 až 9250) nebo obecný rozsah
             start = 8250
             target = 9250
             percent = min(max(int(((val - start) / (target - start)) * 100), 0), 100)
 
-            # Aktualizace v globálním přehledu
             for o in ACTIVE_ORDERS_DATA:
                 if o["client"] == self.client_name:
                     o["percent"] = percent
                     o["status_emoji"] = "🟢"
 
-            await interaction.response.send_message(f"📊 Progress updated! Current status: **{percent}%** completed.", ephemeral=True)
+            await interaction.response.send_message(f"📊 Progress updated: **{percent}%** completed.", ephemeral=True)
             await self.ticket_channel.send(f"📊 **Progress Update:** Current value is `{val}` ➔ **{percent}%** completed.")
         except ValueError:
             await interaction.response.send_message("❌ Please enter a valid number.", ephemeral=True)
 
-# --- UNIVERZÁLNÍ TLAČÍTKO PRO KATALOGY ---
 class CatalogButtonView(View):
     def __init__(self, service_name: str):
         super().__init__(timeout=None)
@@ -299,58 +287,78 @@ class CatalogButtonView(View):
     async def catalog_button(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_modal(ServiceOrderModal(self.service_name))
 
-# --- PŘÍKAZY PRO SETUP KANÁLŮ ---
+# --- PŘÍKAZY PRO INFO A STAFF KANÁLY ---
 
-@bot.command(name='shop')
+@bot.command(name='setup_faq')
 @commands.has_permissions(administrator=True)
-async def shop(ctx):
+async def setup_faq(ctx):
     embed = discord.Embed(
-        title="❄️ Welcome to FrostSTORE Order Hub ❄️",
-        description="Ready to boost your account professionally and securely? Browse our services below or click the button to get started!\n\n"
-                    "**Accepted Payments:**\n"
-                    "<:applepay:123456789> **Apple Pay**\n"
-                    "<:paypal:123456789> **PayPal**\n"
-                    "<:bank:123456789> **Bank Transfer**",
+        title="❓ Frequently Asked Questions (FAQ)",
+        description="**Q: How long does a boost take?**\n"
+                    "A: Most orders are completed within 24–48 hours depending on the tier.\n\n"
+                    "**Q: Is it safe for my account?**\n"
+                    "A: Yes! 100% manual playing by professional and trusted players.\n\n"
+                    "**Q: How do I track my order?**\n"
+                    "A: Once paid, a private ticket channel is created for you where you can track progress.",
         color=discord.Color.purple()
     )
-    embed.set_footer(text="FrostSTORE™ — Professional Boosting Service")
+    embed.set_footer(text="FrostSTORE™ FAQ")
     await ctx.send(embed=embed)
 
-@bot.command(name='setup_ranked')
+@bot.command(name='setup_announcements')
 @commands.has_permissions(administrator=True)
-async def setup_ranked(ctx):
-    embed = get_service_pricing_embed("Ranked Boost")
-    await ctx.send(embed=embed, view=CatalogButtonView("Ranked Boost"))
+async def setup_announcements(ctx):
+    embed = discord.Embed(
+        title="📢 FrostSTORE Announcements",
+        description="Welcome to official announcements! Stay tuned for special sales, discount events, and updates.",
+        color=discord.Color.purple()
+    )
+    embed.set_footer(text="FrostSTORE™ News")
+    await ctx.send(embed=embed)
 
-@bot.command(name='setup_prestige')
+@bot.command(name='setup_payments')
 @commands.has_permissions(administrator=True)
-async def setup_prestige(ctx):
-    embed = get_service_pricing_embed("Prestige")
-    await ctx.send(embed=embed, view=CatalogButtonView("Prestige"))
+async def setup_payments(ctx):
+    embed = discord.Embed(
+        title="💳 Accepted Payment Methods",
+        description="We accept secure and fast payments via:\n\n"
+                    "<:applepay:123456789> **Apple Pay**\n"
+                    "<:paypal:123456789> **PayPal**\n"
+                    "<:bank:123456789> **Bank Transfer**\n\n"
+                    "*Contact the owner in support for payment details.*",
+        color=discord.Color.purple()
+    )
+    embed.set_footer(text="FrostSTORE™ Payments")
+    await ctx.send(embed=embed)
 
-@bot.command(name='setup_winstreak')
+@bot.command(name='setup_support')
 @commands.has_permissions(administrator=True)
-async def setup_winstreak(ctx):
-    embed = get_service_pricing_embed("Winstreak")
-    await ctx.send(embed=embed, view=CatalogButtonView("Winstreak"))
+async def setup_support(ctx):
+    embed = discord.Embed(
+        title="❓ Questions & Support",
+        description="Have any questions or need custom requests? Feel free to open a support ticket or message the staff.",
+        color=discord.Color.purple()
+    )
+    embed.set_footer(text="FrostSTORE™ Support")
+    await ctx.send(embed=embed)
 
-@bot.command(name='setup_trophy')
+@bot.command(name='setup_rules')
 @commands.has_permissions(administrator=True)
-async def setup_trophy(ctx):
-    embed = get_service_pricing_embed("Trophy Bulk")
-    await ctx.send(embed=embed, view=CatalogButtonView("Trophy Bulk"))
+async def setup_rules(ctx):
+    embed = discord.Embed(
+        title="📁 Booster Rules & Guidelines",
+        description="1. Always click **Booster Online (🟢)** when starting work.\n"
+                    "2. Update progress regularly using the button.\n"
+                    "3. Be respectful to clients inside tickets.\n"
+                    "4. Never share client account details.",
+        color=discord.Color.red()
+    )
+    embed.set_footer(text="FrostSTORE™ Internal Rules")
+    await ctx.send(embed=embed)
 
-@bot.command(name='setup_matcherino')
-@commands.has_permissions(administrator=True)
-async def setup_matcherino(ctx):
-    embed = get_service_pricing_embed("Matcherino")
-    await ctx.send(embed=embed, view=CatalogButtonView("Matcherino"))
-
-# --- AUTOMATICKÝ PANEL PRO EARNINGS (FUTURISTICKÝ DESIGN) ---
 @bot.command(name='setup_earnings')
 @commands.has_permissions(administrator=True)
 async def setup_earnings(ctx):
-    # Generování futuristického textového vzhledu pro earnings a aktivní objednávky
     orders_text = ""
     if not ACTIVE_ORDERS_DATA:
         orders_text = "No active orders right now."
@@ -369,6 +377,32 @@ async def setup_earnings(ctx):
         f"{orders_text}"
     )
     await ctx.send(earnings_content)
+
+# --- KATALOGOVÉ PŘÍKAZY ---
+@bot.command(name='setup_ranked')
+@commands.has_permissions(administrator=True)
+async def setup_ranked(ctx):
+    await ctx.send(embed=get_service_pricing_embed("Ranked Boost"), view=CatalogButtonView("Ranked Boost"))
+
+@bot.command(name='setup_prestige')
+@commands.has_permissions(administrator=True)
+async def setup_prestige(ctx):
+    await ctx.send(embed=get_service_pricing_embed("Prestige"), view=CatalogButtonView("Prestige"))
+
+@bot.command(name='setup_winstreak')
+@commands.has_permissions(administrator=True)
+async def setup_winstreak(ctx):
+    await ctx.send(embed=get_service_pricing_embed("Winstreak"), view=CatalogButtonView("Winstreak"))
+
+@bot.command(name='setup_trophy')
+@commands.has_permissions(administrator=True)
+async def setup_trophy(ctx):
+    await ctx.send(embed=get_service_pricing_embed("Trophy Bulk"), view=CatalogButtonView("Trophy Bulk"))
+
+@bot.command(name='setup_matcherino')
+@commands.has_permissions(administrator=True)
+async def setup_matcherino(ctx):
+    await ctx.send(embed=get_service_pricing_embed("Matcherino"), view=CatalogButtonView("Matcherino"))
 
 # --- RUN BOT ---
 keep_alive()
