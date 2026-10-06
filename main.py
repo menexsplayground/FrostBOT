@@ -134,7 +134,6 @@ class InteractiveOrderDropdownView(View):
             await interaction.response.send_message("❌ You need at least 9 P11 brawlers to order a Ranked boost.", ephemeral=True)
             return
 
-        # Price calculation logic
         base_price = 25.0
         surcharge_text = "+0% (Base Price)"
         if self.service_type == "Ranked Boost":
@@ -406,6 +405,29 @@ class StaffOrderControlView(View):
 
 
 # --- SETUP COMMANDS ---
+
+@bot.command(name='setup_order')
+@commands.has_permissions(administrator=True)
+async def setup_order(ctx):
+    embed = discord.Embed(
+        title="🛒 How to Order",
+        description=(
+            "1. **Choose Service**\n"
+            "Head over to our **SERVICES** category (`#ranked`, `#prestige`, `#winstreak`, etc.).\n\n"
+            "2. **Click & Fill Form**\n"
+            "Click the **Order Now** button under your desired service. A form will pop up for you to fill in your current stats, goals, and brawlers.\n\n"
+            "3. **Payment Methods**\n"
+            "We accept secure payments via:\n"
+            "<:applepay:1556991495678984313> **Apple Pay**\n"
+            "<:paypal:1556991529896247427> **PayPal**\n"
+            "<:banktransfer:1557079953101553684> **Bank Transfer**\n\n"
+            "4. **Secure Ticket**\n"
+            "Once the owner confirms your payment, a private secure ticket will be created automatically for your boost!"
+        ),
+        color=discord.Color.purple()
+    )
+    embed.set_footer(text="FrostSTORE™ — Professional & Secure Boosting")
+    await ctx.send(embed=embed)
 
 @bot.command(name='setup_ranked')
 @commands.has_permissions(administrator=True)
