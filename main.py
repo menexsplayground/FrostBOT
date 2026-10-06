@@ -1,7 +1,7 @@
 import os
 import discord
 from discord.ext import commands
-from discord.ui import Modal, TextInput, View, Button
+from discord.ui import Modal, TextInput, View, Button, Select
 from flask import Flask
 from threading import Thread
 
@@ -31,14 +31,13 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 MONTHLY_EARNINGS = 0.0
 TODAY_EARNINGS = 0.0
 ACTIVE_ORDERS_DATA = []
-MATCHERINO_STOCK = 5  # Výchozí skladová zásoba pro Matcherino
+MATCHERINO_STOCK = 5
 
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name} (ID: {bot.user.id})')
     print('FrostSTORE Bot je plně spuštěný a připravený!')
 
-# --- AUTOMATICKÉ PŘIDĚLENÍ ROLE ZA SERVER BOOST ---
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
     if before.premium_since != after.premium_since and after.premium_since is not None:
@@ -46,9 +45,9 @@ async def on_member_update(before: discord.Member, after: discord.Member):
         if role and role not in after.roles:
             await after.add_roles(role)
 
-# --- ŠABLONY CENÍKŮ S TVÝMI DOPLNĚNÝMI EMOJI ---
+# --- ŠABLONY CENÍKŮ ---
 def get_service_embed_with_image(service_type: str):
-    image_url = "ZDE_VLOZ_ODKAZ_NA_OBRAZEK"  # Sem vlož URL obrázku (např. z Discordu)
+    image_url = "ZDE_VLOZ_ODKAZ_NA_OBRAZEK"
     
     if service_type == "Prestige":
         desc = (
@@ -69,7 +68,7 @@ def get_service_embed_with_image(service_type: str):
         )
         color = discord.Color.blue()
     elif service_type == "Winstreak":
-        desc = "⚡ **WINSTREAK SERVICE** ⚡\nZadej požadovaný winstreak (číslo) a platební metodu."
+        desc = "⚡ **WINSTREAK SERVICE** ⚡\nVyber požadovaný winstreak a platební metodu kliknutím níže."
         color = discord.Color.orange()
     elif service_type == "Trophy Bulk":
         desc = "🏆 **TROPHY BULK SERVICE** 🏆\nHromadné navyšování trofejí s ohledem na počet P11 brawlerů."
@@ -88,66 +87,153 @@ def get_service_embed_with_image(service_type: str):
     return embed
 
 
-# --- FORMULÁŘE PRO OBJEDNÁVKY ---
+# --- KLIKACÍ INTERAKTIVNÍ MENU PRO OBJEDNÁVKY ---
 
-class RankedTrophyOrderModal(Modal):
+class RankedTrophySelectView(View):
     def __init__(self, service_type: str):
-        super().__init__(title=f"FrostSTORE — {service_type}")
+        super().__init__(timeout=None)
+        self.service_type = service_type
+        
+        # Přidáme tlačítko pro spustění interaktivního výběru
+        self.add_item(RankedOrderStartButton(service_type))
+
+class RankedOrderStartButton(Button):
+    def __init__(self, service_type: str):
+        super().__init__(label="Order Now (Click to Select)", style=discord.ButtonStyle.primary, emoji="🛒")
         self.service_type = service_type
 
-        self.current_stat = TextInput(label="Current Rank / Trophies", placeholder="např. Diamond 1 nebo 8000 trophies", required=True)
-        self.goal_stat = TextInput(label="Goal Rank / Trophies", placeholder="např. Mythic 1 nebo 9000 trophies", required=True)
-        self.p11_brawlers = TextInput(label="Počet P11 Brawlerů", placeholder="např. 15", required=True)
-        self.payment_method = TextInput(label="Payment (applepay / paypal / bank)", placeholder="applepay", required=True)
+    async def callback(self, interaction: discord.Interaction):
+        view = InteractiveOrderDropdownView(self.service_type)
+        await interaction.response.send_message("👇 **Vyber parametry své objednávky přes rozbalovací menu níže:**", view=view, ephemeral=True)
 
-        self.add_item(self.current_stat)
-        self.add_item(self.goal_stat)
-        self.add_item(self.p11_brawlers)
-        self.add_item(self.payment_method)
 
-    async def on_submit(self, interaction: discord.Interaction):
-        try:
-            p11_count = int(self.p11_brawlers.value)
-        except ValueError:
-            await interaction.response.send_message("❌ Počet P11 brawlerů musí být platné číslo!", ephemeral=True)
+class InteractiveOrderDropdownView(View):
+    def __init__(self, service_type: str):
+        super().__init__(timeout=180)
+        self.service_type = service_type
+        self.current_rank = None
+        self.goal_rank = None
+        self.p11_count = None
+        self.payment = None
+
+        # Přidáme select menu pro Current Rank
+        self.add_item(CurrentRankSelect())
+        # Přidáme select menu pro Goal Rank
+        self.add_item(GoalRankSelect())
+        # Přidáme select menu pro P11 brawlery
+        self.add_item(P11CountSelect())
+        # Přidáme select menu pro Platební metodu
+        self.add_item(PaymentMethodSelect())
+
+    @discord.ui.button(label="Odeslat objednávku", style=discord.ButtonStyle.success, emoji="✅", row=4)
+    async def submit_order(self, interaction: discord.Interaction, button: Button):
+        if not all([self.current_rank, self.goal_rank, self.p11_count, self.payment]):
+            await interaction.response.send_message("❌ Nejsou vybrány všechny položky! Prosím vyberte všechny možnosti v menu.", ephemeral=True)
             return
 
-        if self.service_type == "Ranked Boost" and p11_count < 9:
+        try:
+            p11_val = int(self.p11_count)
+        except ValueError:
+            p11_val = 15
+
+        if self.service_type == "Ranked Boost" and p11_val < 9:
             await interaction.response.send_message("❌ S méně než 9 brawlery na Power 11 nelze Ranked boost objednat.", ephemeral=True)
             return
 
         surcharge_text = "+0% (Základní cena)"
         if self.service_type == "Ranked Boost":
-            if 9 <= p11_count <= 20:
+            if 9 <= p11_val <= 20:
                 surcharge_text = "+50% k ceně"
-            elif 21 <= p11_count <= 35:
+            elif 21 <= p11_val <= 35:
                 surcharge_text = "+25% k ceně"
 
-        pm = self.payment_method.value.lower()
-        if "apple" in pm:
-            pay_name = "<:applepay:1556991495678984313> Apple Pay"
-        elif "paypal" in pm:
-            pay_name = "<:paypal:1556991529896247427> PayPal"
-        else:
-            pay_name = "<:banktransfer:1557079953101553684> Bank Transfer"
-
         embed = discord.Embed(title="🔔 New Order Pending Approval", description=f"Client: {interaction.user.mention}\nService: **{self.service_type}**", color=discord.Color.gold())
-        embed.add_field(name="Current", value=self.current_stat.value, inline=True)
-        embed.add_field(name="Goal", value=self.goal_stat.value, inline=True)
-        embed.add_field(name="P11 Brawlers", value=str(p11_count), inline=False)
+        embed.add_field(name="Current", value=self.current_rank, inline=True)
+        embed.add_field(name="Goal", value=self.goal_rank, inline=True)
+        embed.add_field(name="P11 Brawlers", value=str(p11_val), inline=False)
         embed.add_field(name="Příplatek / Pravidlo", value=surcharge_text, inline=False)
-        embed.add_field(name="Payment", value=pay_name, inline=False)
+        embed.add_field(name="Payment", value=self.payment, inline=False)
 
         view = OwnerApprovalView(
             client=interaction.user,
             service_type=self.service_type,
-            route=f"{self.current_stat.value} ➔ {self.goal_stat.value}",
-            payment=pay_name,
-            extra_info=f"P11: {p11_count} ({surcharge_text})"
+            route=f"{self.current_rank} ➔ {self.goal_rank}",
+            payment=self.payment,
+            extra_info=f"P11: {p11_val} ({surcharge_text})"
         )
-        await interaction.response.send_message("✅ Objednávka byla odeslána ke schválení majiteli!", ephemeral=True)
+        await interaction.response.edit_message(content="✅ Objednávka byla úspěšně odeslána ke schválení majiteli!", view=None)
         await interaction.channel.send(embed=embed, view=view)
 
+
+class CurrentRankSelect(Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Bronze", emoji="<:bronzerank:1556988812046114826>"),
+            discord.SelectOption(label="Silver", emoji="<:silverrank:155698887283400724>"),
+            discord.SelectOption(label="Gold", emoji="<:goldrank:1556988947031400588>"),
+            discord.SelectOption(label="Diamond", emoji="<:diamondrank:1556988995970535544>"),
+            discord.SelectOption(label="Mythic", emoji="<:mythicrank:1556990569689911366>"),
+            discord.SelectOption(label="Legendary", emoji="<:legendaryrank:1556989092577681470>"),
+            discord.SelectOption(label="Masters", emoji="<:mastersrank:1556990538677223485>"),
+        ]
+        super().__init__(placeholder="1️⃣ Vyber aktuální rank / stav...", options=options, row=0)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.current_rank = self.values[0]
+        await interaction.response.defer()
+
+
+class GoalRankSelect(Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Silver", emoji="<:silverrank:155698887283400724>"),
+            discord.SelectOption(label="Gold", emoji="<:goldrank:1556988947031400588>"),
+            discord.SelectOption(label="Diamond", emoji="<:diamondrank:1556988995970535544>"),
+            discord.SelectOption(label="Mythic", emoji="<:mythicrank:1556990569689911366>"),
+            discord.SelectOption(label="Legendary", emoji="<:legendaryrank:1556989092577681470>"),
+            discord.SelectOption(label="Masters", emoji="<:mastersrank:1556990538677223485>"),
+            discord.SelectOption(label="Pro Rank", emoji="<:prorank:1556989154900836403>"),
+        ]
+        super().__init__(placeholder="2️⃣ Vyber cílový rank...", options=options, row=1)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.goal_rank = self.values[0]
+        await interaction.response.defer()
+
+
+class P11CountSelect(Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="9-20 P11 Brawlerů (+50%)", value="15"),
+            discord.SelectOption(label="21-35 P11 Brawlerů (+25%)", value="25"),
+            discord.SelectOption(label="35-50 P11 Brawlerů (Základ)", value="40"),
+        ]
+        super().__init__(placeholder="3️⃣ Vyber počet P11 brawlerů...", options=options, row=2)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.p11_count = self.values[0]
+        await interaction.response.defer()
+
+
+class PaymentMethodSelect(Select):
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Apple Pay", emoji="<:applepay:1556991495678984313>", value="<:applepay:1556991495678984313> Apple Pay"),
+            discord.SelectOption(label="PayPal", emoji="<:paypal:1556991529896247427>", value="<:paypal:1556991529896247427> PayPal"),
+            discord.SelectOption(label="Bank Transfer", emoji="<:banktransfer:1557079953101553684>", value="<:banktransfer:1557079953101553684> Bank Transfer"),
+        ]
+        super().__init__(placeholder="4️⃣ Vyber platební metodu...", options=options, row=3)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.payment = self.values[0]
+        await interaction.response.defer()
+
+
+# --- OSTATNÍ SLUŽBY (Winstreak / Matcherino) ---
+class WinstreakSelectView(View):
+    @discord.ui.button(label="Objednat Winstreak", style=discord.ButtonStyle.primary, emoji="⚡")
+    async def winstreak_btn(self, interaction: discord.Interaction, button: Button):
+        await interaction.response.send_modal(WinstreakOrderModal())
 
 class WinstreakOrderModal(Modal):
     def __init__(self):
@@ -181,6 +267,15 @@ class WinstreakOrderModal(Modal):
         await interaction.channel.send(embed=embed, view=view)
 
 
+class MatcherinoSelectView(View):
+    @discord.ui.button(label="Objednat Matcherino Pin", style=discord.ButtonStyle.danger, emoji="🎟️")
+    async def matcherino_btn(self, interaction: discord.Interaction, button: Button):
+        global MATCHERINO_STOCK
+        if MATCHERINO_STOCK <= 0:
+            await interaction.response.send_message("❌ **Omlouváme se, ale momentálně není nic na skladě!**", ephemeral=True)
+            return
+        await interaction.response.send_modal(MatcherinoOrderModal())
+
 class MatcherinoOrderModal(Modal):
     def __init__(self):
         super().__init__(title="FrostSTORE — Matcherino")
@@ -190,7 +285,7 @@ class MatcherinoOrderModal(Modal):
     async def on_submit(self, interaction: discord.Interaction):
         global MATCHERINO_STOCK
         if MATCHERINO_STOCK <= 0:
-            await interaction.response.send_message("❌ **Omlouváme se, ale momentálně není nic na sklade!**", ephemeral=True)
+            await interaction.response.send_message("❌ Sklad je prázdný!", ephemeral=True)
             return
 
         pm = self.payment_method.value.lower()
@@ -215,7 +310,7 @@ class MatcherinoOrderModal(Modal):
         await interaction.channel.send(embed=embed, view=view)
 
 
-# --- SCHVALOVÁNÍ PLATBY MAJITELEM A VYTVÁŘENÍ TICKETU ---
+# --- SCHVALOVÁNÍ PLATBY A TICKETU ---
 class OwnerApprovalView(View):
     def __init__(self, client, service_type, route, payment, extra_info):
         super().__init__(timeout=None)
@@ -271,7 +366,6 @@ class OwnerApprovalView(View):
         await interaction.response.send_message(f"💳 Platba potvrzena! Byl vytvořen nový ticket: {ticket_channel.mention}", ephemeral=True)
 
 
-# --- OVLÁDÁNÍ V TICKETU PRO STAFF ---
 class StaffOrderControlView(View):
     def __init__(self, client_name, service_short):
         super().__init__(timeout=None)
@@ -301,50 +395,32 @@ class StaffOrderControlView(View):
         await interaction.message.delete()
 
 
-# --- TLAČÍTKO V KATALOGU ---
-class CatalogButtonView(View):
-    def __init__(self, service_name: str):
-        super().__init__(timeout=None)
-        self.service_name = service_name
-
-    @discord.ui.button(label="Order Now", style=discord.ButtonStyle.primary, emoji="🛒")
-    async def catalog_button(self, interaction: discord.Interaction, button: Button):
-        if self.service_name in ["Ranked Boost", "Trophy Bulk", "Prestige"]:
-            await interaction.response.send_modal(RankedTrophyOrderModal(self.service_name))
-        elif self.service_name == "Winstreak":
-            await interaction.response.send_modal(WinstreakOrderModal())
-        elif self.service_name == "Matcherino":
-            await interaction.response.send_modal(MatcherinoOrderModal())
-        else:
-            await interaction.response.send_modal(RankedTrophyOrderModal(self.service_name))
-
-
-# --- PŘÍKAZY PRO VYTVOŘENÍ KATALOGŮ A SEKCÍ ---
+# --- PŘÍKAZY PRO VYTVOŘENÍ KATALOGŮ ---
 
 @bot.command(name='setup_ranked')
 @commands.has_permissions(administrator=True)
 async def setup_ranked(ctx):
-    await ctx.send(embed=get_service_embed_with_image("Ranked Boost"), view=CatalogButtonView("Ranked Boost"))
+    await ctx.send(embed=get_service_embed_with_image("Ranked Boost"), view=RankedTrophySelectView("Ranked Boost"))
 
 @bot.command(name='setup_trophy')
 @commands.has_permissions(administrator=True)
-async def setup_trophy(ctx: commands.Context):
-    await ctx.send(embed=get_service_embed_with_image("Trophy Bulk"), view=CatalogButtonView("Trophy Bulk"))
-
-@bot.command(name='setup_winstreak')
-@commands.has_permissions(administrator=True)
-async def setup_winstreak(ctx: commands.Context):
-    await ctx.send(embed=get_service_embed_with_image("Winstreak"), view=CatalogButtonView("Winstreak"))
-
-@bot.command(name='setup_matcherino')
-@commands.has_permissions(administrator=True)
-async def setup_matcherino(ctx: commands.Context):
-    await ctx.send(embed=get_service_embed_with_image("Matcherino"), view=CatalogButtonView("Matcherino"))
+async def setup_trophy(ctx):
+    await ctx.send(embed=get_service_embed_with_image("Trophy Bulk"), view=RankedTrophySelectView("Trophy Bulk"))
 
 @bot.command(name='setup_prestige')
 @commands.has_permissions(administrator=True)
-async def setup_prestige(ctx: commands.Context):
-    await ctx.send(embed=get_service_embed_with_image("Prestige"), view=CatalogButtonView("Prestige"))
+async def setup_prestige(ctx):
+    await ctx.send(embed=get_service_embed_with_image("Prestige"), view=RankedTrophySelectView("Prestige"))
+
+@bot.command(name='setup_winstreak')
+@commands.has_permissions(administrator=True)
+async def setup_winstreak(ctx):
+    await ctx.send(embed=get_service_embed_with_image("Winstreak"), view=WinstreakSelectView())
+
+@bot.command(name='setup_matcherino')
+@commands.has_permissions(administrator=True)
+async def setup_matcherino(ctx):
+    await ctx.send(embed=get_service_embed_with_image("Matcherino"), view=MatcherinoSelectView())
 
 @bot.command(name='set_stock')
 @commands.has_permissions(administrator=True)
@@ -355,32 +431,32 @@ async def set_stock(ctx, amount: int):
 
 @bot.command(name='setup_faq')
 @commands.has_permissions(administrator=True)
-async def setup_faq(ctx: commands.Context):
+async def setup_faq(ctx):
     await ctx.send(embed=discord.Embed(title="❓ FAQ", description="Často kladené otázky...", color=discord.Color.purple()))
 
 @bot.command(name='setup_announcements')
 @commands.has_permissions(administrator=True)
-async def setup_announcements(ctx: commands.Context):
+async def setup_announcements(ctx):
     await ctx.send(embed=discord.Embed(title="📢 Announcements", description="Novinky...", color=discord.Color.purple()))
 
 @bot.command(name='setup_payments')
 @commands.has_permissions(administrator=True)
-async def setup_payments(ctx: commands.Context):
+async def setup_payments(ctx):
     await ctx.send(embed=discord.Embed(title="💳 Payments", description="Přijímáme tyto platební metody:\n<:applepay:1556991495678984313> Apple Pay\n<:paypal:1556991529896247427> PayPal\n<:banktransfer:1557079953101553684> Bank Transfer", color=discord.Color.purple()))
 
 @bot.command(name='setup_support')
 @commands.has_permissions(administrator=True)
-async def setup_support(ctx: commands.Context):
+async def setup_support(ctx):
     await ctx.send(embed=discord.Embed(title="❓ Support", description="Otevři ticket pro podporu.", color=discord.Color.purple()))
 
 @bot.command(name='setup_rules')
 @commands.has_permissions(administrator=True)
-async def setup_rules(ctx: commands.Context):
+async def setup_rules(ctx):
     await ctx.send(embed=discord.Embed(title="📁 Rules", description="Pravidla pro boostery...", color=discord.Color.red()))
 
 @bot.command(name='setup_earnings')
 @commands.has_permissions(administrator=True)
-async def setup_earnings(ctx: commands.Context):
+async def setup_earnings(ctx):
     orders_text = ""
     if not ACTIVE_ORDERS_DATA:
         orders_text = "No active orders right now."
@@ -402,7 +478,7 @@ async def setup_earnings(ctx: commands.Context):
 
 @bot.command(name='setup_become_booster')
 @commands.has_permissions(administrator=True)
-async def setup_become_booster(ctx: commands.Context):
+async def setup_become_booster(ctx):
     view = View(timeout=None)
     @view.item
     class ApplyBtn(Button):
