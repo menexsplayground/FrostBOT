@@ -27,7 +27,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# --- GLOBÁLNÍ PROMĚNNÉ ---
+# --- GLOBAL VARIABLES ---
 MONTHLY_EARNINGS = 0.0
 TODAY_EARNINGS = 0.0
 ACTIVE_ORDERS_DATA = []
@@ -36,7 +36,7 @@ MATCHERINO_STOCK = 5
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name} (ID: {bot.user.id})')
-    print('FrostSTORE Bot je plně spuštěný a připravený!')
+    print('FrostSTORE Bot is fully online and ready!')
 
 @bot.event
 async def on_member_update(before: discord.Member, after: discord.Member):
@@ -45,7 +45,7 @@ async def on_member_update(before: discord.Member, after: discord.Member):
         if role and role not in after.roles:
             await after.add_roles(role)
 
-# --- ŠABLONY CENÍKŮ ---
+# --- SERVICE EMBED TEMPLATES ---
 def get_service_embed_with_image(service_type: str):
     image_url = "ZDE_VLOZ_ODKAZ_NA_OBRAZEK"
     
@@ -60,21 +60,21 @@ def get_service_embed_with_image(service_type: str):
     elif service_type == "Ranked Boost":
         desc = (
             "💎 **RANKED BOOST PRICING & P11 RULES** 💎\n\n"
-            "• **0–8 P11 Brawlerů:** ❌ Nelze objednat!\n"
-            "• **9–20 P11 Brawlerů:** +50% k ceně\n"
-            "• **21–35 P11 Brawlerů:** +25% k ceně\n"
-            "• **35–50 P11 Brawlerů:** Základní cena (+0%)\n\n"
-            "Ranky: <:bronzerank:1556988812046114826> <:silverrank:155698887283400724> <:goldrank:1556988947031400588> <:diamondrank:1556988995970535544> <:mythicrank:1556990569689911366> <:legendaryrank:1556989092577681470> <:prorank:1556989154900836403> <:mastersrank:1556990538677223485>"
+            "• **0–8 P11 Brawlers:** ❌ Cannot be ordered!\n"
+            "• **9–20 P11 Brawlers:** +50% price surcharge\n"
+            "• **21–35 P11 Brawlers:** +25% price surcharge\n"
+            "• **35–50 P11 Brawlers:** Base price (+0%)\n\n"
+            "Ranks: <:bronzerank:1556988812046114826> <:silverrank:155698887283400724> <:goldrank:1556988947031400588> <:diamondrank:1556988995970535544> <:mythicrank:1556990569689911366> <:legendaryrank:1556989092577681470> <:prorank:1556989154900836403> <:mastersrank:1556990538677223485>"
         )
         color = discord.Color.blue()
     elif service_type == "Winstreak":
-        desc = "⚡ **WINSTREAK SERVICE** ⚡\nVyber požadovaný winstreak a platební metodu kliknutím níže."
+        desc = "⚡ **WINSTREAK SERVICE** ⚡\nSelect your desired winstreak and payment method below."
         color = discord.Color.orange()
     elif service_type == "Trophy Bulk":
-        desc = "🏆 **TROPHY BULK SERVICE** 🏆\nHromadné navyšování trofejí s ohledem na počet P11 brawlerů."
+        desc = "🏆 **TROPHY BULK SERVICE** 🏆\nBulk trophy boosting based on your P11 brawler count."
         color = discord.Color.gold()
     elif service_type == "Matcherino":
-        desc = f"🎟️ **MATCHERINO PINS / CODES** 🎟️\nAktuálně skladem: **{MATCHERINO_STOCK} ks**"
+        desc = f"🎟️ **MATCHERINO PINS / CODES** 🎟️\nCurrently in stock: **{MATCHERINO_STOCK} pcs**"
         color = discord.Color.red()
     else:
         desc = f"Professional boosting services for {service_type}."
@@ -87,14 +87,12 @@ def get_service_embed_with_image(service_type: str):
     return embed
 
 
-# --- KLIKACÍ INTERAKTIVNÍ MENU PRO OBJEDNÁVKY ---
+# --- INTERACTIVE DROPDOWN ORDER VIEWS ---
 
 class RankedTrophySelectView(View):
     def __init__(self, service_type: str):
         super().__init__(timeout=None)
         self.service_type = service_type
-        
-        # Přidáme tlačítko pro spustění interaktivního výběru
         self.add_item(RankedOrderStartButton(service_type))
 
 class RankedOrderStartButton(Button):
@@ -104,7 +102,7 @@ class RankedOrderStartButton(Button):
 
     async def callback(self, interaction: discord.Interaction):
         view = InteractiveOrderDropdownView(self.service_type)
-        await interaction.response.send_message("👇 **Vyber parametry své objednávky přes rozbalovací menu níže:**", view=view, ephemeral=True)
+        await interaction.response.send_message("👇 **Select your order options using the dropdowns below:**", view=view, ephemeral=True)
 
 
 class InteractiveOrderDropdownView(View):
@@ -116,19 +114,15 @@ class InteractiveOrderDropdownView(View):
         self.p11_count = None
         self.payment = None
 
-        # Přidáme select menu pro Current Rank
         self.add_item(CurrentRankSelect())
-        # Přidáme select menu pro Goal Rank
         self.add_item(GoalRankSelect())
-        # Přidáme select menu pro P11 brawlery
         self.add_item(P11CountSelect())
-        # Přidáme select menu pro Platební metodu
         self.add_item(PaymentMethodSelect())
 
-    @discord.ui.button(label="Odeslat objednávku", style=discord.ButtonStyle.success, emoji="✅", row=4)
+    @discord.ui.button(label="Submit Order", style=discord.ButtonStyle.success, emoji="✅", row=4)
     async def submit_order(self, interaction: discord.Interaction, button: Button):
         if not all([self.current_rank, self.goal_rank, self.p11_count, self.payment]):
-            await interaction.response.send_message("❌ Nejsou vybrány všechny položky! Prosím vyberte všechny možnosti v menu.", ephemeral=True)
+            await interaction.response.send_message("❌ Please select all options in the dropdown menus before submitting!", ephemeral=True)
             return
 
         try:
@@ -137,21 +131,26 @@ class InteractiveOrderDropdownView(View):
             p11_val = 15
 
         if self.service_type == "Ranked Boost" and p11_val < 9:
-            await interaction.response.send_message("❌ S méně než 9 brawlery na Power 11 nelze Ranked boost objednat.", ephemeral=True)
+            await interaction.response.send_message("❌ You need at least 9 P11 brawlers to order a Ranked boost.", ephemeral=True)
             return
 
-        surcharge_text = "+0% (Základní cena)"
+        # Price calculation logic
+        base_price = 25.0
+        surcharge_text = "+0% (Base Price)"
         if self.service_type == "Ranked Boost":
             if 9 <= p11_val <= 20:
-                surcharge_text = "+50% k ceně"
+                base_price *= 1.50
+                surcharge_text = "+50% Surcharge"
             elif 21 <= p11_val <= 35:
-                surcharge_text = "+25% k ceně"
+                base_price *= 1.25
+                surcharge_text = "+25% Surcharge"
 
         embed = discord.Embed(title="🔔 New Order Pending Approval", description=f"Client: {interaction.user.mention}\nService: **{self.service_type}**", color=discord.Color.gold())
         embed.add_field(name="Current", value=self.current_rank, inline=True)
         embed.add_field(name="Goal", value=self.goal_rank, inline=True)
         embed.add_field(name="P11 Brawlers", value=str(p11_val), inline=False)
-        embed.add_field(name="Příplatek / Pravidlo", value=surcharge_text, inline=False)
+        embed.add_field(name="Rule / Surcharge", value=surcharge_text, inline=False)
+        embed.add_field(name="Calculated Price", value=f"{base_price:.2f}€", inline=False)
         embed.add_field(name="Payment", value=self.payment, inline=False)
 
         view = OwnerApprovalView(
@@ -159,24 +158,29 @@ class InteractiveOrderDropdownView(View):
             service_type=self.service_type,
             route=f"{self.current_rank} ➔ {self.goal_rank}",
             payment=self.payment,
+            price_val=base_price,
             extra_info=f"P11: {p11_val} ({surcharge_text})"
         )
-        await interaction.response.edit_message(content="✅ Objednávka byla úspěšně odeslána ke schválení majiteli!", view=None)
+        await interaction.response.edit_message(content="✅ Your order has been successfully sent for owner approval!", view=None)
         await interaction.channel.send(embed=embed, view=view)
 
 
 class CurrentRankSelect(Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="Bronze", emoji="<:bronzerank:1556988812046114826>"),
-            discord.SelectOption(label="Silver", emoji="<:silverrank:155698887283400724>"),
-            discord.SelectOption(label="Gold", emoji="<:goldrank:1556988947031400588>"),
-            discord.SelectOption(label="Diamond", emoji="<:diamondrank:1556988995970535544>"),
-            discord.SelectOption(label="Mythic", emoji="<:mythicrank:1556990569689911366>"),
-            discord.SelectOption(label="Legendary", emoji="<:legendaryrank:1556989092577681470>"),
+            discord.SelectOption(label="Bronze I", emoji="<:bronzerank:1556988812046114826>"),
+            discord.SelectOption(label="Bronze II", emoji="<:bronzerank:1556988812046114826>"),
+            discord.SelectOption(label="Bronze III", emoji="<:bronzerank:1556988812046114826>"),
+            discord.SelectOption(label="Silver I", emoji="<:silverrank:155698887283400724>"),
+            discord.SelectOption(label="Silver II", emoji="<:silverrank:155698887283400724>"),
+            discord.SelectOption(label="Silver III", emoji="<:silverrank:155698887283400724>"),
+            discord.SelectOption(label="Gold I", emoji="<:goldrank:1556988947031400588>"),
+            discord.SelectOption(label="Diamond I", emoji="<:diamondrank:1556988995970535544>"),
+            discord.SelectOption(label="Mythic I", emoji="<:mythicrank:1556990569689911366>"),
+            discord.SelectOption(label="Legendary I", emoji="<:legendaryrank:1556989092577681470>"),
             discord.SelectOption(label="Masters", emoji="<:mastersrank:1556990538677223485>"),
         ]
-        super().__init__(placeholder="1️⃣ Vyber aktuální rank / stav...", options=options, row=0)
+        super().__init__(placeholder="Select your CURRENT rank...", options=options, row=0)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.current_rank = self.values[0]
@@ -186,15 +190,16 @@ class CurrentRankSelect(Select):
 class GoalRankSelect(Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="Silver", emoji="<:silverrank:155698887283400724>"),
-            discord.SelectOption(label="Gold", emoji="<:goldrank:1556988947031400588>"),
-            discord.SelectOption(label="Diamond", emoji="<:diamondrank:1556988995970535544>"),
-            discord.SelectOption(label="Mythic", emoji="<:mythicrank:1556990569689911366>"),
-            discord.SelectOption(label="Legendary", emoji="<:legendaryrank:1556989092577681470>"),
+            discord.SelectOption(label="Bronze II", emoji="<:bronzerank:1556988812046114826>"),
+            discord.SelectOption(label="Silver I", emoji="<:silverrank:155698887283400724>"),
+            discord.SelectOption(label="Gold I", emoji="<:goldrank:1556988947031400588>"),
+            discord.SelectOption(label="Diamond I", emoji="<:diamondrank:1556988995970535544>"),
+            discord.SelectOption(label="Mythic I", emoji="<:mythicrank:1556990569689911366>"),
+            discord.SelectOption(label="Legendary I", emoji="<:legendaryrank:1556989092577681470>"),
             discord.SelectOption(label="Masters", emoji="<:mastersrank:1556990538677223485>"),
             discord.SelectOption(label="Pro Rank", emoji="<:prorank:1556989154900836403>"),
         ]
-        super().__init__(placeholder="2️⃣ Vyber cílový rank...", options=options, row=1)
+        super().__init__(placeholder="Select your DESIRED rank...", options=options, row=1)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.goal_rank = self.values[0]
@@ -204,11 +209,11 @@ class GoalRankSelect(Select):
 class P11CountSelect(Select):
     def __init__(self):
         options = [
-            discord.SelectOption(label="9-20 P11 Brawlerů (+50%)", value="15"),
-            discord.SelectOption(label="21-35 P11 Brawlerů (+25%)", value="25"),
-            discord.SelectOption(label="35-50 P11 Brawlerů (Základ)", value="40"),
+            discord.SelectOption(label="9-20 P11 Brawlers (+50%)", value="15"),
+            discord.SelectOption(label="21-35 P11 Brawlers (+25%)", value="25"),
+            discord.SelectOption(label="35-50 P11 Brawlers (Base Price)", value="40"),
         ]
-        super().__init__(placeholder="3️⃣ Vyber počet P11 brawlerů...", options=options, row=2)
+        super().__init__(placeholder="Select number of P11 Brawlers...", options=options, row=2)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.p11_count = self.values[0]
@@ -222,23 +227,23 @@ class PaymentMethodSelect(Select):
             discord.SelectOption(label="PayPal", emoji="<:paypal:1556991529896247427>", value="<:paypal:1556991529896247427> PayPal"),
             discord.SelectOption(label="Bank Transfer", emoji="<:banktransfer:1557079953101553684>", value="<:banktransfer:1557079953101553684> Bank Transfer"),
         ]
-        super().__init__(placeholder="4️⃣ Vyber platební metodu...", options=options, row=3)
+        super().__init__(placeholder="Select payment method...", options=options, row=3)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.payment = self.values[0]
         await interaction.response.defer()
 
 
-# --- OSTATNÍ SLUŽBY (Winstreak / Matcherino) ---
+# --- WINSTREAK & MATCHERINO ---
 class WinstreakSelectView(View):
-    @discord.ui.button(label="Objednat Winstreak", style=discord.ButtonStyle.primary, emoji="⚡")
+    @discord.ui.button(label="Order Winstreak", style=discord.ButtonStyle.primary, emoji="⚡")
     async def winstreak_btn(self, interaction: discord.Interaction, button: Button):
         await interaction.response.send_modal(WinstreakOrderModal())
 
 class WinstreakOrderModal(Modal):
     def __init__(self):
         super().__init__(title="FrostSTORE — Winstreak")
-        self.target_streak = TextInput(label="Zadání / Požadovaný Winstreak", placeholder="např. 15 winů v řadě", required=True)
+        self.target_streak = TextInput(label="Desired Winstreak", placeholder="e.g. 15 wins in a row", required=True)
         self.payment_method = TextInput(label="Payment (applepay / paypal / bank)", placeholder="paypal", required=True)
         self.add_item(self.target_streak)
         self.add_item(self.payment_method)
@@ -253,7 +258,7 @@ class WinstreakOrderModal(Modal):
             pay_name = "<:banktransfer:1557079953101553684> Bank Transfer"
 
         embed = discord.Embed(title="🔔 New Order Pending Approval", description=f"Client: {interaction.user.mention}\nService: **Winstreak**", color=discord.Color.gold())
-        embed.add_field(name="Zadání / Cíl", value=self.target_streak.value, inline=False)
+        embed.add_field(name="Target", value=self.target_streak.value, inline=False)
         embed.add_field(name="Payment", value=pay_name, inline=False)
 
         view = OwnerApprovalView(
@@ -261,18 +266,19 @@ class WinstreakOrderModal(Modal):
             service_type="Winstreak",
             route=f"Streak: {self.target_streak.value}",
             payment=pay_name,
-            extra_info="Winstreak objednávka"
+            price_val=20.0,
+            extra_info="Winstreak order"
         )
-        await interaction.response.send_message("✅ Objednávka byla odeslána ke schválení majiteli!", ephemeral=True)
+        await interaction.response.send_message("✅ Order sent for approval!", ephemeral=True)
         await interaction.channel.send(embed=embed, view=view)
 
 
 class MatcherinoSelectView(View):
-    @discord.ui.button(label="Objednat Matcherino Pin", style=discord.ButtonStyle.danger, emoji="🎟️")
+    @discord.ui.button(label="Order Matcherino Pin", style=discord.ButtonStyle.danger, emoji="🎟️")
     async def matcherino_btn(self, interaction: discord.Interaction, button: Button):
         global MATCHERINO_STOCK
         if MATCHERINO_STOCK <= 0:
-            await interaction.response.send_message("❌ **Omlouváme se, ale momentálně není nic na skladě!**", ephemeral=True)
+            await interaction.response.send_message("❌ **Sorry, currently out of stock!**", ephemeral=True)
             return
         await interaction.response.send_modal(MatcherinoOrderModal())
 
@@ -285,7 +291,7 @@ class MatcherinoOrderModal(Modal):
     async def on_submit(self, interaction: discord.Interaction):
         global MATCHERINO_STOCK
         if MATCHERINO_STOCK <= 0:
-            await interaction.response.send_message("❌ Sklad je prázdný!", ephemeral=True)
+            await interaction.response.send_message("❌ Stock is empty!", ephemeral=True)
             return
 
         pm = self.payment_method.value.lower()
@@ -304,20 +310,22 @@ class MatcherinoOrderModal(Modal):
             service_type="Matcherino",
             route="Matcherino Pin/Code",
             payment=pay_name,
-            extra_info="Matcherino skladový produkt"
+            price_val=10.0,
+            extra_info="Matcherino stock product"
         )
-        await interaction.response.send_message("✅ Objednávka byla odeslána ke schválení majiteli!", ephemeral=True)
+        await interaction.response.send_message("✅ Order sent for approval!", ephemeral=True)
         await interaction.channel.send(embed=embed, view=view)
 
 
-# --- SCHVALOVÁNÍ PLATBY A TICKETU ---
+# --- OWNER APPROVAL & TICKETS ---
 class OwnerApprovalView(View):
-    def __init__(self, client, service_type, route, payment, extra_info):
+    def __init__(self, client, service_type, route, payment, price_val, extra_info):
         super().__init__(timeout=None)
         self.client = client
         self.service_type = service_type
         self.route = route
         self.payment = payment
+        self.price_val = price_val
         self.extra_info = extra_info
 
     @discord.ui.button(label="Confirm Payment & Create Ticket", style=discord.ButtonStyle.green, emoji="✅")
@@ -326,7 +334,7 @@ class OwnerApprovalView(View):
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            self.client: discord.PermissionOverwrite(view_channel=True, send_messages=False, read_message_history=True),
+            self.client: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True),
             guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True)
         }
 
@@ -335,20 +343,21 @@ class OwnerApprovalView(View):
 
         embed = discord.Embed(
             title=f"🚀 Secure Order Ticket — {self.service_type}",
-            description=f"Client: {self.client.mention}\nProgress: 🛌 0% (Waiting for booster)\n\n*Použij tlačítka níže pro správu.*",
+            description=f"Client: {self.client.mention}\nProgress: 🛌 0% (Waiting for booster)\n\n*Use buttons below for order control.*",
             color=discord.Color.purple()
         )
-        embed.add_field(name="Detail / Route", value=self.route, inline=False)
+        embed.add_field(name="Route / Detail", value=self.route, inline=False)
         embed.add_field(name="Info", value=self.extra_info, inline=False)
-        embed.add_field(name="Payment", value=self.payment, inline=False)
+        embed.add_field(name="Price", value=f"{self.price_val:.2f}€", inline=True)
+        embed.add_field(name="Payment", value=self.payment, inline=True)
 
-        staff_view = StaffOrderControlView(client_name=self.client.name, service_short=self.service_type)
+        staff_view = StaffOrderControlView(client_name=self.client.name, service_short=self.service_type, price_val=self.price_val)
         await ticket_channel.send(embed=embed, view=staff_view)
 
         ACTIVE_ORDERS_DATA.append({
             "client": self.client.name,
             "route": self.route,
-            "price": "35€",
+            "price": f"{self.price_val:.2f}€",
             "status_emoji": "🛌",
             "percent": 0
         })
@@ -357,45 +366,46 @@ class OwnerApprovalView(View):
         if avail_channel:
             avail_embed = discord.Embed(
                 title="✅ New Available Boost Order!",
-                description=f"Service: **{self.service_type}**\nDetail: `{self.route}`\nClient: {self.client.name}",
+                description=f"Service: **{self.service_type}**\nDetail: `{self.route}`\nPrice: **{self.price_val:.2f}€**\nClient: {self.client.name}",
                 color=discord.Color.green()
             )
             await avail_channel.send(embed=avail_embed)
 
         await interaction.message.delete()
-        await interaction.response.send_message(f"💳 Platba potvrzena! Byl vytvořen nový ticket: {ticket_channel.mention}", ephemeral=True)
+        await interaction.response.send_message(f"💳 Payment confirmed! Ticket created: {ticket_channel.mention}", ephemeral=True)
 
 
 class StaffOrderControlView(View):
-    def __init__(self, client_name, service_short):
+    def __init__(self, client_name, service_short, price_val):
         super().__init__(timeout=None)
         self.client_name = client_name
         self.service_short = service_short
+        self.price_val = price_val
 
     @discord.ui.button(label="Booster Online (🟢)", style=discord.ButtonStyle.secondary)
     async def booster_online(self, interaction: discord.Interaction, button: Button):
         for o in ACTIVE_ORDERS_DATA:
             if o["client"] == self.client_name:
                 o["status_emoji"] = "🟢"
-        await interaction.response.send_message("🟢 Booster je aktivní na této objednávce!", ephemeral=True)
+        await interaction.response.send_message("🟢 Booster marked as active!", ephemeral=True)
 
     @discord.ui.button(label="Close & Review", style=discord.ButtonStyle.danger, emoji="⭐")
     async def close_order(self, interaction: discord.Interaction, button: Button):
         global MONTHLY_EARNINGS, TODAY_EARNINGS, ACTIVE_ORDERS_DATA
-        MONTHLY_EARNINGS += 35.0
-        TODAY_EARNINGS += 35.0
+        MONTHLY_EARNINGS += self.price_val
+        TODAY_EARNINGS += self.price_val
         ACTIVE_ORDERS_DATA = [o for o in ACTIVE_ORDERS_DATA if o["client"] != self.client_name]
 
         guild = interaction.guild
         review_channel = discord.utils.get(guild.text_channels, name="review")
         if review_channel:
-            await review_channel.send(embed=discord.Embed(title="⭐ Review Request", description=f"Klient **{self.client_name}** dokončil objednávku!", color=discord.Color.gold()))
+            await review_channel.send(embed=discord.Embed(title="⭐ Review Request", description=f"Client **{self.client_name}** has completed their order!", color=discord.Color.gold()))
 
-        await interaction.channel.send("⭐ Objednávka dokončena, archivuji kanál...")
+        await interaction.channel.send("⭐ Order completed, archiving channel...")
         await interaction.message.delete()
 
 
-# --- PŘÍKAZY PRO VYTVOŘENÍ KATALOGŮ ---
+# --- SETUP COMMANDS ---
 
 @bot.command(name='setup_ranked')
 @commands.has_permissions(administrator=True)
@@ -427,32 +437,48 @@ async def setup_matcherino(ctx):
 async def set_stock(ctx, amount: int):
     global MATCHERINO_STOCK
     MATCHERINO_STOCK = amount
-    await ctx.send(f"✅ Sklad Matcherino pinů byl úspěšně nastaven na: **{MATCHERINO_STOCK} ks**")
+    await ctx.send(f"✅ Matcherino stock successfully updated to: **{MATCHERINO_STOCK} pcs**")
+
+@bot.command(name='add_earnings')
+@commands.has_permissions(administrator=True)
+async def add_earnings(ctx, amount: float):
+    global MONTHLY_EARNINGS, TODAY_EARNINGS
+    MONTHLY_EARNINGS += amount
+    TODAY_EARNINGS += amount
+    await ctx.send(f"✅ Successfully added **{amount}€** to booster earnings!")
+
+@bot.command(name='set_earnings')
+@commands.has_permissions(administrator=True)
+async def set_earnings(ctx, monthly: float, today: float):
+    global MONTHLY_EARNINGS, TODAY_EARNINGS
+    MONTHLY_EARNINGS = monthly
+    TODAY_EARNINGS = today
+    await ctx.send(f"✅ Earnings updated! Monthly: **{MONTHLY_EARNINGS}€**, Today: **{TODAY_EARNINGS}€**")
 
 @bot.command(name='setup_faq')
 @commands.has_permissions(administrator=True)
 async def setup_faq(ctx):
-    await ctx.send(embed=discord.Embed(title="❓ FAQ", description="Často kladené otázky...", color=discord.Color.purple()))
+    await ctx.send(embed=discord.Embed(title="❓ FAQ", description="Frequently asked questions...", color=discord.Color.purple()))
 
 @bot.command(name='setup_announcements')
 @commands.has_permissions(administrator=True)
 async def setup_announcements(ctx):
-    await ctx.send(embed=discord.Embed(title="📢 Announcements", description="Novinky...", color=discord.Color.purple()))
+    await ctx.send(embed=discord.Embed(title="📢 Announcements", description="Latest news...", color=discord.Color.purple()))
 
 @bot.command(name='setup_payments')
 @commands.has_permissions(administrator=True)
 async def setup_payments(ctx):
-    await ctx.send(embed=discord.Embed(title="💳 Payments", description="Přijímáme tyto platební metody:\n<:applepay:1556991495678984313> Apple Pay\n<:paypal:1556991529896247427> PayPal\n<:banktransfer:1557079953101553684> Bank Transfer", color=discord.Color.purple()))
+    await ctx.send(embed=discord.Embed(title="💳 Payments", description="We accept:\n<:applepay:1556991495678984313> Apple Pay\n<:paypal:1556991529896247427> PayPal\n<:banktransfer:1557079953101553684> Bank Transfer", color=discord.Color.purple()))
 
 @bot.command(name='setup_support')
 @commands.has_permissions(administrator=True)
 async def setup_support(ctx):
-    await ctx.send(embed=discord.Embed(title="❓ Support", description="Otevři ticket pro podporu.", color=discord.Color.purple()))
+    await ctx.send(embed=discord.Embed(title="❓ Support", description="Open a ticket for support.", color=discord.Color.purple()))
 
 @bot.command(name='setup_rules')
 @commands.has_permissions(administrator=True)
 async def setup_rules(ctx):
-    await ctx.send(embed=discord.Embed(title="📁 Rules", description="Pravidla pro boostery...", color=discord.Color.red()))
+    await ctx.send(embed=discord.Embed(title="📁 Rules", description="Rules for boosters...", color=discord.Color.red()))
 
 @bot.command(name='setup_earnings')
 @commands.has_permissions(administrator=True)
@@ -485,10 +511,10 @@ async def setup_become_booster(ctx):
         def __init__(self):
             super().__init__(label="Apply to Become a Booster", style=discord.ButtonStyle.success)
         async def callback(self, interaction: discord.Interaction):
-            await interaction.response.send_message("Náborový formulář do týmu boosterů...", ephemeral=True)
-    await ctx.send(embed=discord.Embed(title="⭐ Become a Booster", description="Klikni pro přihlášení do týmu boosterů.", color=discord.Color.gold()), view=view)
+            await interaction.response.send_message("Booster application form...", ephemeral=True)
+    await ctx.send(embed=discord.Embed(title="⭐ Become a Booster", description="Click to apply for the booster team.", color=discord.Color.gold()), view=view)
 
-# --- SPUŠTĚNÍ BOTA ---
+# --- RUN BOT ---
 keep_alive()
 TOKEN = os.getenv('DISCORD_TOKEN')
 bot.run(TOKEN)
