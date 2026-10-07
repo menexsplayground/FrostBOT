@@ -65,7 +65,8 @@ def get_service_embed_with_image(service_type: str):
             "• **9–20 P11 Brawlers:** +50% price surcharge\n"
             "• **21–35 P11 Brawlers:** +25% price surcharge\n"
             "• **35–50 P11 Brawlers:** Base price (+0%)\n\n"
-            "Ranks: <:bronzerank:1556988812046114826> <:silverrank:155698887283400724> <:goldrank:1556988947031400588> <:diamondrank:1556988995970535544> <:mythicrank:1556990569689911366> <:legendaryrank:1556989092577681470> <:prorank:1556989154900836403> <:mastersrank:1556990538677223485>"
+                        "Ranks: <:bronzerank:1556988812046114826> <:silverrank:1556988872834007243> <:goldrank:1556988947031400588> <:diamondrank:1556988995970535544> <:mythicrank:1556990569689911366> <:legendaryrank:1556989092577681470> <:prorank:1556989154900836403> <:mastersrank:1556990538677223485>"
+
         )
         color = discord.Color.blue()
     elif service_type == "Winstreak":
