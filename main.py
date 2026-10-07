@@ -44,6 +44,7 @@ async def on_member_update(before: discord.Member, after: discord.Member):
         role = discord.utils.get(after.guild.roles, name="Trusted Booster")
         if role and role not in after.roles:
             await after.add_roles(role)
+            
 
 # --- SERVICE EMBED TEMPLATES ---
 def get_service_embed_with_image(service_type: str):
@@ -57,7 +58,7 @@ def get_service_embed_with_image(service_type: str):
             "⭐ Fast & reliable service"
         )
         color = discord.Color.purple()
-            elif service_type == "Ranked Boost":
+    elif service_type == "Ranked Boost":
         desc = (
             "💎 **RANKED BOOST PRICING & P11 RULES** 💎\n\n"
             "• **0–8 P11 Brawlers:** ❌ Cannot be ordered!\n"
@@ -66,8 +67,6 @@ def get_service_embed_with_image(service_type: str):
             "• **35–50 P11 Brawlers:** Base price (+0%)\n\n"
             "Ranks: <:bronzerank:1556988812046114826> <:silverrank:155698887283400724> <:goldrank:1556988947031400588> <:diamondrank:1556988995970535544> <:mythicrank:1556990569689911366> <:legendaryrank:1556989092577681470> <:prorank:1556989154900836403> <:mastersrank:1556990538677223485>"
         )
-        color = discord.Color.blue()
-    )
         color = discord.Color.blue()
     elif service_type == "Winstreak":
         desc = "⚡ **WINSTREAK SERVICE** ⚡\nSelect your desired winstreak and payment method below."
@@ -87,6 +86,7 @@ def get_service_embed_with_image(service_type: str):
         embed.set_image(url=image_url)
     embed.set_footer(text="Powered by FrostSTORE™")
     return embed
+
 
 
 # --- INTERACTIVE DROPDOWN ORDER VIEWS ---
