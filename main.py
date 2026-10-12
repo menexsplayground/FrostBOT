@@ -4,12 +4,12 @@ from flask import Flask
 import discord
 from discord.ext import commands
 
-# 1. Miniaturní webový server pro Render (aby nehlásil timeout)
+# Miniaturní webový server pro Render (aby neodpojoval bota kvůli chybějícímu portu)
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "FrostBOT is running!"
+    return "FrostBOT běží zdarma 24/7!"
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
@@ -18,7 +18,7 @@ def run_web():
 # Spuštění webového serveru na pozadí
 threading.Thread(target=run_web, daemon=True).start()
 
-# 2. Nastavení Discord Bota
+# Nastavení Discord Bota
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix='.', intents=intents)
@@ -27,9 +27,7 @@ bot = commands.Bot(command_prefix='.', intents=intents)
 async def on_ready():
     print(f'Bot {bot.user} je úspěšně připojen a běží!')
 
-# Zde přidej své příkazy (např. .setup_career, .setup_tools atd.)
-
-# 3. Spuštění bota
+# Spuštění bota
 token = os.getenv("BOT_TOKEN")
 if token:
     bot.run(token)
