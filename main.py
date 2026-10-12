@@ -258,3 +258,4 @@ async def setup_tools(ctx):
 # Spuštění bota (nahraď svým tokenem)
 token = os.getenv("BOT_TOKEN", "TVUJ_BOT_TOKEN")
 bot.run(token)
+
